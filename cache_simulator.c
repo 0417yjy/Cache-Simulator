@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
+#define CACHE_SIZE 512
 typedef enum { false, true } bool;
 
 
@@ -44,7 +44,7 @@ void LRU_cache(int input[], int input_cnt, int associativity)
 
 	// Allocate the cache structure based on associativity.
 	int **cache;
-	int set_count = 256 / associativity;
+	int set_count = CACHE_SIZE / associativity;
 	if (associativity == 1) {
 		cache = (int **)malloc( sizeof(int *) * set_count );
 		for (i = 0; i < set_count; i++) { // First idx is value, second is LRU stage.
@@ -124,7 +124,7 @@ void LRU_cache(int input[], int input_cnt, int associativity)
 			}
 		}
 	} 
-	else {
+	else if (associativity == 4) {
 		cache = (int **)malloc( sizeof(int *) * set_count );
 		for (i = 0; i < set_count; i++) { // First 4 idx's are values, second 4 are LRU stages.
 			cache[i] = (int *)malloc( sizeof(int) * 8 );
@@ -143,6 +143,7 @@ void LRU_cache(int input[], int input_cnt, int associativity)
 					cache[loc][j+4] = i;
 					cache_hits++;
 					found = true;
+					break;
 				}
 				if (cache[loc][j] != 0) {
 					cnt++;
@@ -172,6 +173,64 @@ void LRU_cache(int input[], int input_cnt, int associativity)
 				for (j = 0; j < 4; j++) {
 					if (cache[loc][j+4] <= min && cache[loc][j] != 0) {  
 						min = cache[loc][j+4];
+						idx = j;
+					}
+				}
+				cache[loc][idx] = input[i];
+				cache[loc][idx+4] = i;
+				cache_misses++;
+			}	
+		}
+	}
+	else if(associativity == 8) {
+		cache = (int **)malloc( sizeof(int *) * set_count );
+		for (i = 0; i < set_count; i++) { // First 8 idx's are values, second 8 are LRU stages.
+			cache[i] = (int *)malloc( sizeof(int) * 16 );
+			int k;
+			for (k = 0; k < 16; k++) { // Initialize to all 0.
+				cache[i][k] = 0;
+			}
+		}
+		for (i = 0; i < input_cnt; i++) {
+			bool found = false;
+			int cnt = 0, j = 0; 
+			int loc = input[i] % set_count;
+			for (j = 0; j < 8; j++) {
+				if (input[i] == cache[loc][j]) { // Hit, update LRU.
+					printf("%d (hit)\n", input[i]);
+					cache[loc][j+8] = i;
+					cache_hits++;
+					found = true;
+					break;
+				}
+				if (cache[loc][j] != 0) {
+					cnt++;
+				}
+			}
+			if (cnt == 0 && !found) { // Whole set is empty, so add it.
+				printf("%d (miss)\n", input[i]);
+				cache[loc][0] = input[i];
+				cache[loc][8] = i;
+				cache_misses++;
+			} 
+			else if (cnt > 0 && cnt < 8 && !found) { // There is at least one empty block.
+				printf("%d (miss)\n", input[i]);
+				int j;
+				for (j = 0; j < 8; j++) {
+					if (cache[loc][j] == 0) { // Found an empty slot.
+						cache[loc][j] = input[i];
+						cache[loc][j+8] = i;
+						break;
+					}
+				}
+				cache_misses++;
+			} 
+			if (cnt == 8 && !found) { // All slots are full so replace LRU.
+				printf("%d (miss)\n", input[i]);
+				int min = 99999, idx = 0, j = 0;
+				for (j = 0; j < 8; j++) {
+					if (cache[loc][j+4] <= min && cache[loc][j] != 0) {  
+						min = cache[loc][j+8];
 						idx = j;
 					}
 				}
@@ -211,7 +270,7 @@ void Belady_cache(int input[], int input_cnt, int associativity)
 	int i = 0;
 
 	int **cache;
-	int set_count = 256 / associativity; 
+	int set_count = CACHE_SIZE / associativity; 
 	cache = (int **)malloc( sizeof(int *) * set_count );
 	if (associativity == 1) { // Allocate direct-mapped cache. Set to 0.
 		for (i = 0; i < set_count; i++) {
@@ -347,14 +406,14 @@ int main(int argc, char *argv[])
 	} 
 
 	// Needed values for output and program structure.
-	int cache_size = 256;
+	int cache_size = CACHE_SIZE;
 	int associativity = atoi(argv[1]);
 	int cache_sets;
 	char *algorithm = argv[2];
 	bool is_LRU = false, is_BELADY = false;
 
 	// If invalid associativity value, exit program.
-	if ( associativity != 1 && associativity != 2 && associativity != 4 ) { 
+	if ( associativity != 1 && associativity != 2 && associativity != 4  && associativity != 8) { 
 		fprintf(stderr, "Error: Invalid Associativity Entered!\n");
 		return EXIT_FAILURE;
 	}
